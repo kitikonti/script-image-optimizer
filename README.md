@@ -45,18 +45,20 @@ chmod +x optimize-images.sh
 
 ### Basic Usage
 
+**IMPORTANT: For git-focused mode (default), stage files first with `git add .`**
+
 ```bash
-# Interactive mode (default)
-./optimize-images.sh
+# Stage files and run in interactive mode (default)
+git add . && ./optimize-images.sh
 
-# Automatic mode (no prompts)
-./optimize-images.sh --auto
+# Stage files and run in automatic mode (no prompts)
+git add . && ./optimize-images.sh --auto
 
-# Process specific directory
-./optimize-images.sh --auto /path/to/images/
+# Process all images regardless of git status
+./optimize-images.sh --all-images
 
-# Only uncommitted git images
-./optimize-images.sh --git-only
+# Process specific directory with all images
+./optimize-images.sh --all-images /path/to/images/
 ```
 
 ### Advanced Options
@@ -92,11 +94,13 @@ chmod +x optimize-images.sh
 ### Web Development Workflow
 
 ```bash
-# Before committing new images to git
-./optimize-images.sh --git-only --auto
+# Recommended workflow: Stage files first, then optimize
+git add .
+./optimize-images.sh --auto
+git commit -m "Add optimized images"
 
-# Process all images in a project
-./optimize-images.sh --auto --quality 85 --max-size 3840
+# Alternative: Process all images regardless of git status
+./optimize-images.sh --all-images --auto --quality 85 --max-size 3840
 ```
 
 ### Photography Workflow
@@ -118,14 +122,25 @@ for dir in images/ photos/ assets/; do
 done
 ```
 
-## What the Script Does
+## How the Script Works
 
-1. **Finds Images**: Locates all `.jpg`, `.jpeg`, and `.png` files in the target directory
-2. **Analyzes**: Checks file size, dimensions, and determines optimization needs
-3. **Resizes**: Reduces images larger than max size while maintaining aspect ratio
-4. **Optimizes**: Compresses images to specified quality level
-5. **Strips Metadata**: Removes EXIF, GPS, and other metadata (unless `--keep-metadata` is used)
-6. **Reports**: Shows file size reduction and processing statistics
+### Git-Focused Mode (Default)
+1. **Requires Staging**: Run `git add .` first to stage files
+2. **Finds Staged Images**: Locates staged `.jpg`, `.jpeg`, and `.png` files
+3. **Respects .gitignore**: Only processes files that git would track
+4. **Safe for Repos**: Prevents processing build artifacts or ignored files
+
+### All-Images Mode (--all-images flag)
+1. **Finds All Images**: Locates all `.jpg`, `.jpeg`, and `.png` files in directory
+2. **Ignores Git Status**: Processes everything regardless of git tracking
+3. **Directory Processing**: Useful for batch processing image folders
+
+### Processing Steps
+1. **Analyzes**: Checks file size, dimensions, and determines optimization needs
+2. **Resizes**: Reduces images larger than max size while maintaining aspect ratio
+3. **Optimizes**: Compresses images to specified quality level
+4. **Strips Metadata**: Removes EXIF, GPS, and other metadata (unless `--keep-metadata` is used)
+5. **Reports**: Shows file size reduction and processing statistics
 
 ## Output Example
 
@@ -171,12 +186,36 @@ Summary:
 
 ## Git Integration
 
-When using `--git-only`, the script will:
+### Why Stage Files First?
 
-1. First check `git status` for uncommitted images
-2. If no uncommitted images found (e.g., fresh repository), process all images
-3. Show which images will be affected by git operations
-4. Provide git commands for staging optimized images
+The git-focused approach requires staging files with `git add .` because:
+
+1. **Fresh Repositories**: `git status` only shows directories like `source/`, not individual files
+2. **Respects .gitignore**: Staged files exclude gitignored items automatically
+3. **Covers All Cases**: Works for new files, modified files, and fresh repositories
+4. **Safe Processing**: Only optimizes files that will actually be tracked by git
+
+### Workflow
+
+```bash
+# 1. Stage all trackable files
+git add .
+
+# 2. Optimize staged images
+./optimize-images.sh --auto
+
+# 3. Check results and commit
+git status
+git commit -m "Add optimized images"
+```
+
+### What Gets Processed
+
+- ✅ **New images** in tracked directories
+- ✅ **Modified images** that are already tracked
+- ✅ **Staged images** after `git add`
+- ❌ **Gitignored images** (build artifacts, generated files)
+- ❌ **Unstaged images** (until you run `git add`)
 
 ## Safety Features
 
@@ -209,14 +248,22 @@ When using `--git-only`, the script will:
 ```bash
 #!/bin/bash
 # .git/hooks/pre-commit
-./scripts/optimize-images.sh --git-only --auto
+
+# Check for staged images and optimize them
+staged_images=$(git diff --cached --name-only --diff-filter=A | grep -E '\.(jpg|jpeg|png)$')
+if [ ! -z "$staged_images" ]; then
+    echo "Optimizing staged images..."
+    ./scripts/optimize-images.sh --auto
+    # Re-stage the optimized images
+    git add .
+fi
 ```
 
 ### Build Process
 
 ```bash
-# In your build script
-./optimize-images.sh --auto src/images/
+# In your build script - process all images in source directory
+./optimize-images.sh --all-images --auto src/images/
 ```
 
 ### Deployment Pipeline

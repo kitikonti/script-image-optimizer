@@ -11,7 +11,7 @@
 #   - Strips metadata by default (for privacy and file size)
 #
 # Usage:
-#   ./optimize-images.sh [options] [directory]
+#   git add . && ./optimize-images.sh [options] [directory]
 #
 # Options:
 #   --auto           Process all images without asking for confirmation
@@ -19,22 +19,25 @@
 #   --keep-metadata  Preserve image metadata (default: strip metadata)
 #   --quality N      Set JPEG quality (1-100, default: 85)
 #   --max-size N     Set maximum image dimension (default: 3840)
-#   --git-only       Only process uncommitted images in git repositories
+#   --all-images     Process all images in directory (default: git-focused)
 #   --help           Show this help message
 #
 # Directory:
 #   Path to directory containing images (default: current directory)
 #
 # Examples:
-#   ./optimize-images.sh                             # Interactive mode, current directory
-#   ./optimize-images.sh --auto                      # Auto mode, current directory
-#   ./optimize-images.sh --git-only                  # Only uncommitted git images
-#   ./optimize-images.sh --quality 90 images/       # Custom quality, specific directory
-#   ./optimize-images.sh --max-size 2048 --auto     # Custom max size, auto mode
+#   git add . && ./optimize-images.sh               # Interactive mode, staged images
+#   git add . && ./optimize-images.sh --auto        # Auto mode, staged images
+#   ./optimize-images.sh --all-images               # Process all images in directory
+#   git add . && ./optimize-images.sh --quality 90  # Custom quality, staged images
+#   ./optimize-images.sh --all-images --max-size 2048 --auto  # All images, custom settings
 #
 # Requirements:
 #   - ImageMagick (install with: sudo apt-get install imagemagick)
-#   - Git (optional, only needed for --git-only mode)
+#   - Git (required for default git-focused mode, optional with --all-images)
+#
+# IMPORTANT: For git-focused mode (default), run 'git add .' first to stage files.
+# This allows the script to detect new/modified images while respecting .gitignore.
 #
 # ============================================================================
 
@@ -43,7 +46,7 @@ INTERACTIVE=true
 STRIP_METADATA=true
 QUALITY=85
 MAX_SIZE=3840
-GIT_ONLY=false
+ALL_IMAGES=false
 DIRECTORY="."
 
 # Parse command line arguments
@@ -79,8 +82,8 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ;;
-        --git-only)
-            GIT_ONLY=true
+        --all-images)
+            ALL_IMAGES=true
             shift
             ;;
         --help)
@@ -116,15 +119,16 @@ if ! command -v identify &> /dev/null; then
     exit 1
 fi
 
-if [ "$GIT_ONLY" = true ]; then
+if [ "$ALL_IMAGES" = false ]; then
     if ! command -v git &> /dev/null; then
-        echo "Error: Git is not installed (required for --git-only mode)."
+        echo "Error: Git is not installed (required for default git-focused mode)."
+        echo "Use --all-images flag to process all images without git."
         exit 1
     fi
     
     if ! git rev-parse --git-dir > /dev/null 2>&1; then
-        echo "Error: Not in a git repository (required for --git-only mode)."
-        echo "Please run this script from within your project directory or remove --git-only."
+        echo "Error: Not in a git repository (required for default git-focused mode)."
+        echo "Use --all-images flag to process all images without git."
         exit 1
     fi
 fi
@@ -139,24 +143,32 @@ fi
 cd "$DIRECTORY" || exit 1
 
 # Find images based on mode
-if [ "$GIT_ONLY" = true ]; then
-    # Find new/modified images in git repository
-    images=$(git status --porcelain | grep -E '^\?\?|^ M' | grep -E '\.(jpg|jpeg|png)$' | awk '{print $2}')
-    
-    # If no images found in git status (e.g., fresh repo), find all images
-    if [ -z "$images" ]; then
-        images=$(find . -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" | grep -v ".git" | sed 's|^\./||')
-    fi
-else
+if [ "$ALL_IMAGES" = true ]; then
     # Find all images in directory
     images=$(find . -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" | sed 's|^\./||')
+else
+    # Default: Find staged and modified images in git repository
+    # This requires running 'git add .' first to stage files
+    images=$(git status --porcelain | grep -E '^A |^M ' | grep -E '\.(jpg|jpeg|png)$' | awk '{print $2}')
+    
+    # If no staged images found, suggest running git add
+    if [ -z "$images" ]; then
+        echo "No staged images found."
+        echo ""
+        echo "IMPORTANT: You need to stage files first with 'git add .' to detect images."
+        echo "This allows the script to find new and modified images while respecting .gitignore."
+        echo ""
+        echo "Run: git add . && ./optimize-images.sh [options]"
+        echo "Or use: ./optimize-images.sh --all-images (to process all images regardless of git status)"
+        exit 0
+    fi
 fi
 
 if [ -z "$images" ]; then
-    if [ "$GIT_ONLY" = true ]; then
-        echo "No uncommitted images found."
-    else
+    if [ "$ALL_IMAGES" = true ]; then
         echo "No images found in directory: $DIRECTORY"
+    else
+        echo "No uncommitted images found."
     fi
     exit 0
 fi
@@ -323,9 +335,9 @@ if [ "$processed_count" -gt 0 ] && [ "$total_before" -gt 0 ]; then
 fi
 echo ""
 
-if [ "$GIT_ONLY" = true ]; then
+if [ "$ALL_IMAGES" = true ]; then
+    echo "All images in directory processed."
+else
     echo "Use 'git status' to see the changes."
     echo "Use 'git add' to stage the optimized images."
-else
-    echo "All images in directory processed."
 fi
