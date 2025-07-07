@@ -16,7 +16,7 @@ Before any commit operations, check for image files:
 
 ```bash
 # Check if there are any image files that need optimization
-git status | grep -E '\.(jpg|jpeg|png)$'
+find . -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" | head -5
 ```
 
 #### 2. Ask User About Image Optimization
@@ -45,14 +45,15 @@ Options:
 If user approves, run the optimization:
 
 ```bash
-# Stage files first (required for git-focused mode)
+# For git repositories (recommended - respects .gitignore)
 git add .
+./optimize-images.sh --git-only --auto
 
-# Run image optimization script
+# Or for simple processing (all images)
 ./optimize-images.sh --auto
 
 # Or if script is in different location
-./scripts/optimize-images.sh --auto
+./scripts/optimize-images.sh --git-only --auto
 ```
 
 #### 4. Verify Results
@@ -109,7 +110,12 @@ These should be optimized before committing. The script will:
 • Compress to 85% quality
 • Strip metadata
 
-Run image optimization? (y/n)
+Run image optimization?
+1. Git mode (recommended - respects .gitignore)
+2. Process all images
+3. Skip optimization
+
+Choice (1/2/3):
 ```
 
 #### Success Message
@@ -118,6 +124,7 @@ Run image optimization? (y/n)
 • Processed: 3 images
 • Total size reduction: 4.1MB → 2.3MB (-44%)
 • All images now optimized for web use
+• Mode: Git-aware (respects .gitignore)
 
 Files are ready for commit.
 ```
@@ -152,7 +159,7 @@ staged_images=$(git diff --cached --name-only --diff-filter=A | grep -E '\\.(jpg
 
 if [ ! -z "$staged_images" ]; then
     echo "Optimizing staged images..."
-    ./optimize-images.sh --auto
+    ./optimize-images.sh --git-only --auto
     git add .  # Re-stage optimized images
 fi
 ```
@@ -163,7 +170,7 @@ For projects with build processes, add image optimization as a build step:
 
 ```bash
 # In package.json scripts or Makefile
-"prebuild": "./optimize-images.sh --all-images --auto src/images/"
+"prebuild": "./optimize-images.sh --auto src/images/"
 ```
 
 ## Reference Links
